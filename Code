@@ -1,0 +1,34 @@
+// Завантажуємо GeoJSON файл, який містить геометрію районів
+var assetId = 'users/GospodinMira619/rayonT2'; // Ваш ідентифікатор ресурсу для GeoJSON файлу; Спочатку файл з межами потрібно завантажити в середовище Earth eamgine
+var districtFeatures = ee.FeatureCollection(assetId);
+
+// Завантажуємо зображення з покриттям вічнозеленими рослинами
+var image = ee.Image('COPERNICUS/Landcover/100m/Proba-V-C3/Global/2019')
+  .select('discrete_classification');
+
+// Оператор "map" для обчислення відсотка покриття для кожного району
+var districtCoverPercentage = districtFeatures.map(function(feature) {
+  var districtGeometry = feature.geometry();
+  var districtCoverArea = image
+    .eq(111)  // Код для вічнозелених рослин
+    .multiply(ee.Image.pixelArea())  // Перетворюємо в площу в квадратних метрах
+    .reduceRegion({
+      reducer: ee.Reducer.sum(),
+      geometry: districtGeometry,
+      scale: 100,  // Розмір пікселів
+      maxPixels: 1e12  // Максимальна кількість пікселів для обчислення
+    });
+  var districtArea = districtGeometry.area();
+  var districtPercentage = ee.Number(districtCoverArea.get('discrete_classification')).divide(districtArea).multiply(100);
+  return feature.set('CoverPercentage', districtPercentage);
+});
+
+// Виводимо результат
+print(districtCoverPercentage);
+
+// Зберігаємо результати до файлу CSV
+Export.table.toDrive({
+  collection: districtCoverPercentage,
+  description: 'District_Cover_Percentage',
+  fileFormat: 'CSV'
+});
